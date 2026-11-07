@@ -64,6 +64,34 @@ public class AutoRunModMenu implements ModMenuApi, ConfigScreenFactory<Screen> {
 				.setSaveConsumer((value) -> AutoRunMod.configAutoJump = value)
 				.build());
 
+		// Stop on configured blocks
+		general.addEntry(entryBuilder
+				.startBooleanToggle(
+						Component.translatable("config." + AutoRunMod.MODID + ".stopOnBlock"),
+						AutoRunMod.configStopOnBlock)
+				.setDefaultValue(false)
+				.setTooltip(Component.translatable("config." + AutoRunMod.MODID + ".stopOnBlock.description"))
+				.setSaveConsumer((value) -> AutoRunMod.configStopOnBlock = value)
+				.build());
+
+		general.addEntry(entryBuilder
+				.startStrField(
+						Component.translatable("config." + AutoRunMod.MODID + ".stopBlocks"),
+						AutoRunMod.configStopBlocks)
+				.setDefaultValue("")
+				.setTooltip(Component.translatable("config." + AutoRunMod.MODID + ".stopBlocks.description"))
+				.setSaveConsumer((value) -> AutoRunMod.configStopBlocks = value)
+				.build());
+
+		general.addEntry(entryBuilder
+				.startBooleanToggle(
+						Component.translatable("config." + AutoRunMod.MODID + ".changeDirection"),
+						AutoRunMod.configChangeDirection)
+				.setDefaultValue(false)
+				.setTooltip(Component.translatable("config." + AutoRunMod.MODID + ".changeDirection.description"))
+				.setSaveConsumer((value) -> AutoRunMod.configChangeDirection = value)
+				.build());
+
 		return builder.setSavingRunnable(() -> {
 			AutoRunMod.saveConfig(AutoRunMod.CFG_FILE);
 			AutoRunMod.loadConfig(AutoRunMod.CFG_FILE);

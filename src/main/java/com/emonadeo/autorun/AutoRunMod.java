@@ -16,8 +16,12 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class AutoRunMod implements ClientModInitializer {
 
@@ -29,6 +33,9 @@ public class AutoRunMod implements ClientModInitializer {
 	public static boolean configPersistAutoRun = false;
 	public static boolean configShowMessage = true;
 	public static boolean configSprint = false;
+	public static boolean configStopOnBlock = false;
+	public static String configStopBlocks = "";
+	public static boolean configChangeDirection = false;
 
 	public static boolean overrideForward = false;
 	public static boolean overrideBackward = false;
@@ -45,6 +52,7 @@ public class AutoRunMod implements ClientModInitializer {
 	 * When true, ignore directional deactivation inputs
 	 */
 	private static boolean activating = false;
+	private static BlockPos lastDirectionBlockPos;
 
 	private static KeyMapping toggleAutoRunKey;
 
@@ -74,8 +82,15 @@ public class AutoRunMod implements ClientModInitializer {
 			}
 		});
 
+		ClientTickEvents.END_CLIENT_TICK.register(AutoRunMod::updateDirectionFromBlock);
+
 		// Deactivate when pressing the same or opposite auto-running direction
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (configStopOnBlock && isAutoRunActive() && isOnConfiguredStopBlock(client)) {
+				deactivateAutoRun(client);
+				return;
+			}
+
 			if (activating) {
 				if ((overrideForward && !client.options.keyUp.isDown())
 						|| (overrideBackward && !client.options.keyDown.isDown())
@@ -97,10 +112,54 @@ public class AutoRunMod implements ClientModInitializer {
 		});
 
 		ClientEntityEvents.ENTITY_UNLOAD.register((entity, clientWorld) -> {
-			if (!configPersistAutoRun && isAutoRunActive() && entity instanceof LocalPlayer) {
-				deactivateAutoRun(Minecraft.getInstance());
+			if (entity instanceof LocalPlayer) {
+				lastDirectionBlockPos = null;
+				if (!configPersistAutoRun && isAutoRunActive()) {
+					deactivateAutoRun(Minecraft.getInstance());
+				}
 			}
 		});
+	}
+
+	private static void updateDirectionFromBlock(Minecraft client) {
+		if (client.player == null || client.level == null) {
+			lastDirectionBlockPos = null;
+			return;
+		}
+
+		BlockPos blockPos = client.player.getOnPos();
+		if (blockPos.equals(lastDirectionBlockPos)) {
+			return;
+		}
+		lastDirectionBlockPos = blockPos.immutable();
+
+		if (!configChangeDirection || !isAutoRunActive()) {
+			return;
+		}
+
+		BlockState blockState = client.level.getBlockState(blockPos);
+		if (BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).toString()
+				.equals("minecraft:magenta_glazed_terracotta")) {
+		float yaw = blockState.getValue(HorizontalDirectionalBlock.FACING).getOpposite().toYRot();
+			client.player.setYRot(yaw);
+			client.player.setYHeadRot(yaw);
+		}
+	}
+
+	private static boolean isOnConfiguredStopBlock(Minecraft client) {
+		if (client.player == null || client.level == null || configStopBlocks.isBlank()) {
+			return false;
+		}
+
+		String blockId = BuiltInRegistries.BLOCK
+				.getKey(client.level.getBlockState(client.player.getOnPos()).getBlock())
+				.toString();
+		for (String configuredBlock : configStopBlocks.split(",")) {
+			if (blockId.equalsIgnoreCase(configuredBlock.trim())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isAutoRunActive() {
@@ -172,6 +231,9 @@ public class AutoRunMod implements ClientModInitializer {
 			configPersistAutoRun = Boolean.parseBoolean(cfg.getProperty("persistAutoRun", "false"));
 			configShowMessage = Boolean.parseBoolean(cfg.getProperty("showMessage", "true"));
 			configAutoJump = Boolean.parseBoolean(cfg.getProperty("autoJump", "true"));
+			configStopOnBlock = Boolean.parseBoolean(cfg.getProperty("stopOnBlock", "false"));
+			configStopBlocks = cfg.getProperty("stopBlocks", "");
+			configChangeDirection = Boolean.parseBoolean(cfg.getProperty("changeDirection", "false"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -184,6 +246,9 @@ public class AutoRunMod implements ClientModInitializer {
 			fos.write(("persistAutoRun=" + configPersistAutoRun + "\n").getBytes());
 			fos.write(("showMessage=" + configShowMessage + "\n").getBytes());
 			fos.write(("autoJump=" + configAutoJump + "\n").getBytes());
+			fos.write(("stopOnBlock=" + configStopOnBlock + "\n").getBytes());
+			fos.write(("stopBlocks=" + configStopBlocks.replace("\r", "").replace("\n", "") + "\n").getBytes());
+			fos.write(("changeDirection=" + configChangeDirection + "\n").getBytes());
 			fos.close();
 		} catch (IOException e) {
 			e.printStackTrace();
